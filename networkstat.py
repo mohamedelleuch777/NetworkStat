@@ -7,16 +7,25 @@ import argparse
 import shutil
 
 # Constants
-VERSION = "1.0.0"
+VERSION = "1.3.19"
 DEFAULT_SLEEP = 1
+# link to make text art: https://patorjk.com/software/taag/
+# font name: ANSI Shadow
 ASCII_LOGO = r"""
-██╗  ██╗██╗██╗     ██╗   ██╗ ██████╗ ██████╗ ██████╗ 
-██║ ██╔╝██║██║     ██║   ██║██╔════╝ ██╔══██╗██╔══██╗
-█████╔╝ ██║██║     ██║   ██║██║  ███╗██████╔╝██████╔╝
-██╔═██╗ ██║██║     ██║   ██║██║   ██║██╔═══╝ ██╔═══╝ 
-██║  ██╗██║███████╗╚██████╔╝╚██████╔╝██║     ██║     
-╚═╝  ╚═╝╚═╝╚══════╝ ╚═════╝  ╚═════╝ ╚═╝     ╚═╝     
-                     by XILYOR
+███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗
+████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝
+██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝
+██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗
+██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗
+╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
+
+        ███████╗████████╗ █████╗ ████████╗
+        ██╔════╝╚══██╔══╝██╔══██╗╚══██╔══╝
+        ███████╗   ██║   ███████║   ██║
+        ╚════██║   ██║   ██╔══██║   ██║
+        ███████║   ██║   ██║  ██║   ██║
+        ╚══════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝
+                                                by XILYOR.COM
 """
 
 def list_interfaces():
@@ -31,7 +40,7 @@ def get_interface_stats(interface):
     except KeyError:
         return None
 
-def show_interface_data(interfaces, sleep, watch=False):
+def show_interface_data(interfaces, sleep, watch=False, unit=None):
     if watch:
         try:
             while True:
@@ -41,7 +50,7 @@ def show_interface_data(interfaces, sleep, watch=False):
                     stats = get_interface_stats(iface)
                     if stats:
                         down, up = stats
-                        print(f"📶 {iface} ⬇️ {down / 1024:.2f} KB ⬆️ {up / 1024:.2f} KB")
+                        print(f"📶 {iface} ⬇️ {format_bytes(down, unit)} ⬆️ {format_bytes(up, unit)}")
                     else:
                         print(f"⚠️ Interface '{iface}' not found.")
                 time.sleep(sleep)
@@ -52,9 +61,29 @@ def show_interface_data(interfaces, sleep, watch=False):
             stats = get_interface_stats(iface)
             if stats:
                 down, up = stats
-                print(f"📶 {iface} ⬇️ {down / 1024:.2f} KB ⬆️ {up / 1024:.2f} KB")
+                print(f"📶 {iface} ⬇️ {format_bytes(down, unit)} ⬆️ {format_bytes(up, unit)}")
             else:
                 print(f"⚠️ Interface '{iface}' not found.")
+
+def format_bytes(value, forced_unit=None):
+    units = ['B', 'K', 'M', 'G', 'T', 'P']
+    step = 1024.0
+
+    if forced_unit:
+        forced_unit = forced_unit.upper()
+        if forced_unit not in units:
+            return f"{value:.2f} B/s ❌ Invalid unit"
+        idx = units.index(forced_unit)
+        scaled = value / (step ** idx)
+        return f"{scaled:.2f} {forced_unit}b/s"
+
+    # Auto-scale logic (max 3 digits before decimal)
+    for unit in units:
+        if value < 1000:
+            return f"{value:.0f} {unit}b/s"
+        value /= step
+    return f"{value:.2f} Pb/s"
+
 
 def main():
     parser = argparse.ArgumentParser(add_help=False)
@@ -64,6 +93,7 @@ def main():
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("-w", "--watch", action="store_true")
     parser.add_argument("-s", "--sleep", type=int, default=DEFAULT_SLEEP)
+    parser.add_argument("-u", "--unit", type=str, help="Force output unit (B|K|M|G|T|P)")
     
     args = parser.parse_args()
 
@@ -99,7 +129,7 @@ Examples:
         return
 
     interfaces = args.interfaces.split("|")
-    show_interface_data(interfaces, args.sleep, watch=args.watch)
+    show_interface_data(interfaces, sleep, watch=args.watch, unit=args.unit)
 
 if __name__ == "__main__":
     main()
