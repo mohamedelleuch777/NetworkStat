@@ -41,32 +41,47 @@ def get_interface_stats(interface):
         return None
 
 def show_interface_data(interfaces, sleep, watch=False, unit=None):
+    def read_counters():
+        return {
+            iface: psutil.net_io_counters(pernic=True).get(iface)
+            for iface in interfaces
+        }
+
     if watch:
         try:
+            prev = read_counters()
             while True:
-                os.system('clear')
+                time.sleep(sleep)
+                os.system("clear")
                 print(f"🔄 Monitoring interfaces every {sleep} second(s)...\n")
+                current = read_counters()
                 for iface in interfaces:
-                    stats = get_interface_stats(iface)
-                    if stats:
-                        down, up = stats
-                        print(f"📶 {iface} ⬇️ {format_bytes(down, unit)} ⬆️ {format_bytes(up, unit)}")
+                    if prev[iface] and current[iface]:
+                        down_diff = current[iface].bytes_recv - prev[iface].bytes_recv
+                        up_diff = current[iface].bytes_sent - prev[iface].bytes_sent
+                        print(f"📶 {iface} ⬇️ {format_bytes(down_diff / sleep, unit)} ⬆️ {format_bytes(up_diff / sleep, unit)}")
                     else:
                         print(f"⚠️ Interface '{iface}' not found.")
-                time.sleep(sleep)
+                prev = current
         except KeyboardInterrupt:
             print("\n🛑 Watch stopped.")
     else:
+        # Snapshot mode: sleep briefly between reads
+        print(f"📸 Taking a 1-second snapshot to estimate real-time speed...\n")
+        prev = read_counters()
+        time.sleep(sleep)
+        current = read_counters()
+
         for iface in interfaces:
-            stats = get_interface_stats(iface)
-            if stats:
-                down, up = stats
-                print(f"📶 {iface} ⬇️ {format_bytes(down, unit)} ⬆️ {format_bytes(up, unit)}")
+            if prev[iface] and current[iface]:
+                down_diff = current[iface].bytes_recv - prev[iface].bytes_recv
+                up_diff = current[iface].bytes_sent - prev[iface].bytes_sent
+                print(f"📶 {iface} ⬇️ {format_bytes(down_diff / sleep, unit)} ⬆️ {format_bytes(up_diff / sleep, unit)}")
             else:
                 print(f"⚠️ Interface '{iface}' not found.")
 
 def format_bytes(value, forced_unit=None):
-    units = ['B', 'K', 'M', 'G', 'T', 'P']
+    units = [' ', 'K', 'M', 'G', 'T', 'P']
     step = 1024.0
 
     if forced_unit:
