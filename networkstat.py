@@ -127,6 +127,10 @@ Examples:
     if not args.interfaces:
         print("❌ No interfaces provided. Use --help for usage.")
         return
+    
+
+    # 👇 Add this before show_interface_data
+    sleep = args.sleep if args.sleep is not None else config.get('default_sleep', DEFAULT_SLEEP_FALLBACK)
 
     interfaces = args.interfaces.split("|")
     show_interface_data(interfaces, sleep, watch=args.watch, unit=args.unit)
