@@ -31,5 +31,21 @@ else
   echo "⚠️  Config already exists at $CONFIG_FILE, not overwritten."
 fi
 
+set -e
+
+# Check and install psutil silently
+echo "🔧 Checking Python dependencies..."
+if ! python3 -c "import psutil" 2>/dev/null; then
+    echo "📦 Installing psutil globally..."
+    if sudo pip3 install psutil > /dev/null 2>&1; then
+        echo "✅ psutil installed successfully."
+    else
+        echo "❌ Failed to install psutil. Please check your pip configuration."
+        exit 1
+    fi
+else
+    echo "✅ psutil already installed."
+fi
+
 echo "✅ Installed '$SCRIPT_NAME' globally. Try running: $SCRIPT_NAME --help"
 
