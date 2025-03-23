@@ -8,18 +8,31 @@ import std.file;
 import std.datetime;
 import core.thread;
 import std.algorithm;
+import std.process : execute;
+import std.string : split, strip;
+import std.file : readText;
+import std.string : split, strip, splitLines;
+import std.process : execute;
+import std.conv : to;
 
-enum VERSION = "1.3.28";
+enum VERSION = "1.4.1";
 enum DEFAULT_SLEEP = 1;
 
 immutable ASCII_LOGO = q"DLIM
 ███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗
 ████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝
-██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝ 
-██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗ 
+██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝
+██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗
 ██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗
 ╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
-        by XILYOR.COM
+
+               ███████╗████████╗ █████╗ ████████╗
+               ██╔════╝╚══██╔══╝██╔══██╗╚══██╔══╝
+               ███████╗   ██║   ███████║   ██║
+               ╚════██║   ██║   ██╔══██║   ██║
+               ███████║   ██║   ██║  ██║   ██║
+               ╚══════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝
+                                                by XILYOR.COM
 DLIM";
 
 struct NetStat {
@@ -28,21 +41,85 @@ struct NetStat {
 }
 
 NetStat getInterfaceStats(string iface) {
-    auto lines = File("/proc/net/dev").byLineCopy.drop(2);
-    foreach (line; lines) {
-        if (line.strip.startsWith(iface ~ ":")) {
-            auto tokens = line.split().filter!(a => !a.empty).array;
-            return NetStat(to!ulong(tokens[1]), to!ulong(tokens[9]));
+    version (linux)
+    {
+        try {
+            auto content = readText("/proc/net/dev");
+            auto lines = content.splitLines().drop(2);
+
+            foreach (line; lines) {
+                if (line.strip.startsWith(iface ~ ":")) {
+                    auto tokens = line.split().filter!(a => !a.empty).array;
+                    return NetStat(to!ulong(tokens[1]), to!ulong(tokens[9]));
+                }
+            }
+        } catch (Exception e) {
+            writeln("❌ Error reading stats: ", e.msg);
         }
     }
+    else version (OSX)
+    {
+        try {
+            auto output = execute(["netstat", "-ib"]);
+            auto lines = output.output.splitLines();
+
+            foreach (line; lines[1 .. $]) { // skip header
+                auto tokens = line.strip.split().filter!(a => !a.empty).array;
+
+                if (tokens.length >= 10 && tokens[0] == iface) {
+                    ulong recv = to!ulong(tokens[6]);
+                    ulong sent = to!ulong(tokens[9]);
+                    return NetStat(recv, sent);
+                }
+            }
+        } catch (Exception e) {
+            writeln("❌ Failed to get stats via netstat: ", e.msg);
+        }
+    }
+    else
+    {
+        writeln("❌ This OS is not yet supported.");
+    }
+
     return NetStat(0, 0); // fallback
 }
 
-void listInterfaces() {
-    writeln("📡 Available network interfaces:");
-    foreach (line; File("/proc/net/dev").byLineCopy.drop(2)) {
-        auto name = line.strip.split(":")[0].strip;
-        writeln("  🔌 ", name);
+void listInterfaces()
+{
+    version (linux)
+    {
+        import std.file : readText;
+        // import std.algorithm : drop;
+        import std.string : splitLines;
+
+        try {
+            auto content = readText("/proc/net/dev");
+            auto lines = content.splitLines().drop(2);
+            writeln("📡 Available network interfaces:");
+            foreach (line; lines) {
+                auto iface = line.strip.split(":")[0];
+                writeln("  🔌 ", iface);
+            }
+        } catch (Exception e) {
+            writeln("❌ Failed to read interfaces: ", e.msg);
+        }
+    }
+    else version (OSX)
+    {
+        try {
+            auto output = execute(["/sbin/ifconfig", "-l"]);
+            auto interfaces = output.output.strip.split(" ");
+            writeln("📡 Available network interfaces:");
+            foreach (iface; interfaces) {
+                writeln("  🔌 ", iface);
+            }
+        } catch (Exception e) {
+            writeln("❌ Failed to get interfaces via ifconfig: ", e.msg);
+        }
+    }
+    else
+    {
+        writeln("❌ Sorry, this operating system is not supported yet.");
     }
 }
 
@@ -79,7 +156,7 @@ void showInterfaceData(string[] interfaces, int sleep, bool watch, string unit) 
             // Move cursor up: header + N interfaces
             writef("\033[%dA", interfaces.length + 1);
 
-            writeln("🔄 Monitoring interfaces every ", sleep, " second(s)...");
+            writeln("🔄 Monitoring interfaces: ", interfaces);
 
             foreach (iface; interfaces) {
                 auto current = getInterfaceStats(iface);
@@ -136,7 +213,7 @@ void main(string[] args) {
         writeln("Examples:");
         writeln("  networkstat --list");
         writeln("  networkstat enp0");
-        writeln("  networkstat enp0|wlp4s0 --watch --sleep 2\n");
+        writeln("  networkstat enp0:wlp4s0 --watch --sleep 2\n");
         return;
     }
 
@@ -155,6 +232,6 @@ void main(string[] args) {
         return;
     }
 
-    auto interfaces = args[$-1].split("|");
+    auto interfaces = args[$-1].split(":");
     showInterfaceData(interfaces, sleep, watch, unit);
 }

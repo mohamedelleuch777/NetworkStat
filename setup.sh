@@ -6,6 +6,9 @@ MAN_PATH="/usr/local/share/man/man1/$SCRIPT_NAME.1"
 CONFIG_DIR="$HOME/.config/networkstat"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 
+# rebuild the project
+ldc2 main.d -of=networkstat -O3 -release -boundscheck=off
+
 # Install globally
 sudo cp networkstat "$INSTALL_PATH"
 
